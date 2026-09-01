@@ -1,0 +1,13 @@
+# Witness for IOS-46767: records whether a ready_for_review workflow event fires,
+# so we can compare a GITHUB_TOKEN-driven transition against a human one.
+name: witness
+
+on:
+  pull_request:
+    types: [ready_for_review]
+
+jobs:
+  saw-it:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "witness fired for PR #${{ github.event.pull_request.number }}"
