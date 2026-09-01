@@ -1,0 +1,53 @@
+# Probe harness for IOS-46767: does a PR state change made with GITHUB_TOKEN
+# trigger GitHub's CODEOWNERS auto-request? Dispatch with mode=draft|direct|ready.
+name: harness
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'draft (open draft PR), direct (open non-draft PR), ready (mark PR ready)'
+        required: true
+        default: draft
+      pr:
+        description: 'PR number, for mode=ready'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Act
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ inputs.mode }}
+          PR: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = "ready" ]; then
+            gh pr ready "$PR"
+            echo "marked $PR ready with GITHUB_TOKEN"
+            exit 0
+          fi
+
+          branch="probe-$MODE-$GITHUB_RUN_ID"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$branch"
+          echo "probe $MODE $GITHUB_RUN_ID" >> README.md
+          git commit -qam "probe $MODE $GITHUB_RUN_ID"
+          git push -q origin "$branch"
+
+          if [ "$MODE" = "draft" ]; then
+            gh pr create --draft --base main --head "$branch" \
+              --title "probe draft $GITHUB_RUN_ID" --body 'Opened as draft by GITHUB_TOKEN.'
+          else
+            gh pr create --base main --head "$branch" \
+              --title "probe direct $GITHUB_RUN_ID" --body 'Opened non-draft by GITHUB_TOKEN.'
+          fi
